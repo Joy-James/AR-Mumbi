@@ -34,7 +34,7 @@ function App() {
     scene = new THREE.Scene();
     camera = new THREE.PerspectiveCamera(
       70,
-      myCanvas.innerWidth / myCanvas.innerHeight,
+      myCanvas.clientWidth / myCanvas.clientHeight,
       0.01,
       20
     );
@@ -49,29 +49,21 @@ function App() {
       alpha: true,
     });
     renderer.setPixelRatio(window.devicePixelRatio);
-    renderer.setSize(myCanvas.innerWidth, myCanvas.innerHeight);
+    renderer.setSize(myCanvas.clientWidth, myCanvas.clientHeight);
     renderer.xr.enabled = true;
 
-    // Don't add the XREstimatedLight to the scene initially
-    // It doesn't have any estimated lighting values until an AR session starts
     const xrLight = new XREstimatedLight(renderer);
     xrLight.addEventListener("estimationstart", () => {
-      // Swap the default light out for the estimated one so we start getting some estimated values.
       scene.add(xrLight);
       scene.remove(light);
-      // The estimated lighting also provides an env cubemap which we apply here
       if (xrLight.environment) {
         scene.environment = xrLight.environment;
       }
     });
 
     xrLight.addEventListener("estimationend", () => {
-      // Swap the lights back when we stop receiving estimated values
       scene.add(light);
       scene.remove(xrLight);
-
-      // Revert back to the default environment
-      // scene.environment =
     });
 
     let arButton = ARButton.createButton(renderer, {
@@ -84,10 +76,17 @@ function App() {
 
     for (let i = 0; i < models.length; i++) {
       const loader = new GLTFLoader();
-      loader.load(models[i], function (glb) {
-        let model = glb.scene;
-        items[i] = model;
-      });
+      loader.load(
+        models[i],
+        function (glb) {
+          let model = glb.scene;
+          items[i] = model;
+        },
+        undefined,
+        function (error) {
+          console.error("Error loading model:", error);
+        }
+      );
     }
 
     controller = renderer.xr.getController(0);
@@ -107,10 +106,6 @@ function App() {
     if (reticle.visible) {
       let newModel = items[itemSelectedIndex].clone();
       newModel.visible = true;
-      // this one will set the position but not the rotation
-      // newModel.position.setFromMatrixPosition(reticle.matrix);
-
-      // this will set the position and the rotation to face you
       reticle.matrix.decompose(
         newModel.position,
         newModel.quaternion,
@@ -126,12 +121,11 @@ function App() {
   const onClicked = (e, selectItem, index) => {
     itemSelectedIndex = index;
 
-    // remove image selection from others to indicate unclicked
     for (let i = 0; i < models.length; i++) {
       const el = document.querySelector(`#item` + i);
       el.classList.remove("clicked");
     }
-    // set image to selected
+
     e.target.classList.add("clicked");
   };
 
@@ -193,6 +187,18 @@ function App() {
     }
 
     renderer.render(scene, camera);
+  }
+
+  if (navigator.xr) {
+    navigator.xr.isSessionSupported("immersive-ar").then((supported) => {
+      if (supported) {
+        console.log("AR is supported");
+      } else {
+        console.error("AR not supported");
+      }
+    });
+  } else {
+    console.error("WebXR not supported");
   }
 
   return <div className="App"></div>;
